@@ -93,13 +93,35 @@ class ApiException extends \Exception
 
         $field = null;
         $error = null;
-        if (!empty($object->field)) {
+        $message = 'Error executing API call';
+
+        // Try to extract error information from various possible response formats
+        if (!empty($object->field) && !empty($object->error)) {
             $field = $object->field;
             $error = $object->error;
+            $message = "Error executing API call ({$field}: {$error})";
+        } elseif (!empty($object->error)) {
+            // API returned just an error field (no field name)
+            $error = is_string($object->error) ? $object->error : json_encode($object->error);
+            $message = "Error executing API call: {$error}";
+        } elseif (!empty($object->message)) {
+            // Some APIs use 'message' instead of 'error'
+            $error = $object->message;
+            $message = "Error executing API call: {$error}";
+        } elseif (!empty($object->detail)) {
+            // Some APIs use 'detail'
+            $error = $object->detail;
+            $message = "Error executing API call: {$error}";
+        } else {
+            // Generic error with status code
+            $statusCode = $response->getStatusCode();
+            $body = (string) $response->getBody();
+            $truncatedBody = mb_substr($body, 0, 200);
+            $message = "Error executing API call (HTTP {$statusCode}). Response: {$truncatedBody}";
         }
 
         return new self(
-            "Error executing API call ({$field}: {$error})",
+            $message,
             $response->getStatusCode(),
             $field,
             $error,
@@ -165,7 +187,11 @@ class ApiException extends \Exception
         $object = @json_decode($body);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new self("Unable to decode PayoCity Payment HUB response: '{$body}'.");
+            $statusCode = $response->getStatusCode();
+            $truncatedBody = mb_substr($body, 0, 500);
+            throw new self(
+                "Unable to decode PayoCity Payment HUB response:  (HTTP {$statusCode}, JSON Error: " . json_last_error_msg() . "). Response: '{$truncatedBody}'."
+            );
         }
 
         return $object;

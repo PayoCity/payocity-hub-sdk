@@ -72,7 +72,20 @@ final class CurlCodebrainHttp implements CodebrainHttpInterface
      */
     private function attemptRequest($httpMethod, $url, $headers, $httpBody)
     {
+        // Validate input parameters
+        if (empty($httpMethod)) {
+            throw new ApiException('HTTP method cannot be empty.');
+        }
+
+        if (empty($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new ApiException('Invalid or empty URL provided.');
+        }
+
         $curl = curl_init($url);
+        if ($curl === false) {
+            throw new CurlException('Failed to initialize cURL session.');
+        }
+
         $headers['Content-Type'] = 'application/json';
 
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
@@ -105,10 +118,22 @@ final class CurlCodebrainHttp implements CodebrainHttpInterface
             $curlErrorMessage = 'Curl error: '.curl_error($curl);
 
             if ($this->isConnectTimeoutError($curlErrorNumber, $executionTime)) {
-                throw new CurlException('Unable to connect to the PayoCity Payment HUB. '.$curlErrorMessage);
+                curl_close($curl);
+                throw new CurlException(
+                    sprintf(
+                        'Unable to connect to the PayoCity Payment HUB. (Error %d: %s). Execution time: %.2fs',
+                        $curlErrorNumber,
+                        $curlErrorMessage,
+                        $executionTime
+                    )
+                );
             }
 
-            throw new ApiException($curlErrorMessage);
+            curl_close($curl);
+            throw new ApiException(
+                sprintf('Curl error %d: %s', $curlErrorNumber, $curlErrorMessage),
+                $curlErrorNumber
+            );
         }
 
         // extract header
@@ -194,8 +219,11 @@ final class CurlCodebrainHttp implements CodebrainHttpInterface
             if ($statusCode === self::HTTP_NO_CONTENT) {
                 return null;
             }
-
-            throw new ApiException('No response body found.');
+            
+            throw new ApiException(
+                sprintf('No response body found. HTTP Status: %d', $statusCode),
+                $statusCode
+            );
         }
 
         $object = new \stdClass();
@@ -204,12 +232,27 @@ final class CurlCodebrainHttp implements CodebrainHttpInterface
 
         // Checks if the response is valid JSON
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new ApiException("Unable to decode PayoCity Payment HUB response: '{$response}'.");
+            $jsonError = json_last_error_msg();
+            throw new ApiException(
+                sprintf(
+                    "Unable to decode PayoCity Payment HUB response: (JSON Error: %s). Status: %d. Response: '%s'",
+                    $jsonError,
+                    $statusCode,
+                    mb_substr($httpBody, 0, 200)
+                ),
+                $statusCode
+            );
         }
 
         // Checks if the response has an error
         if (isset($object->body->error)) {
-            throw new ApiException("PayoCity Payment HUB error: '{$object->body->error}'.");
+            $errorDetails = is_string($object->body->error) 
+                ? $object->body->error 
+                : json_encode($object->body->error);
+            throw new ApiException(
+                sprintf("PayoCity Payment HUB error: (Status %d): %s", $statusCode, $errorDetails),
+                $statusCode
+            );
         }
 
         return $object;

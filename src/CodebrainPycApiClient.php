@@ -12,7 +12,7 @@ class CodebrainPycApiClient
     /**
      * Version of our client.
      */
-    public const CLIENT_VERSION = '1.0.1';
+    public const CLIENT_VERSION = '1.0.2';
 
     /**
      * Version of the API.
