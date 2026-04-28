@@ -2,6 +2,8 @@
 
 namespace CodebrainPyc\Hub\Http;
 
+use Psr\Http\Message\ResponseInterface;
+
 interface CodebrainHttpInterface
 {
     /**
@@ -12,11 +14,11 @@ interface CodebrainHttpInterface
      * @param string|array $headers
      * @param string       $httpBody
      *
-     * @return \stdClass|null
+     * @return \Psr\Http\Message\ResponseInterface|null
      *
      * @throws \CodebrainPyc\Hub\Exceptions\ApiException
      */
-    public function send($httpMethod, $url, $headers, $httpBody);
+    public function send($httpMethod, $url, $headers, $httpBody): ?ResponseInterface;
 
     /**
      * The version number for the underlying http client, if available.

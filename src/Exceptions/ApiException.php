@@ -96,13 +96,17 @@ class ApiException extends \Exception
         $message = 'Error executing API call';
 
         // Try to extract error information from various possible response formats
-        if (!empty($object->field) && !empty($object->error)) {
+        // Note: some APIs return {"error": true, "message": "..."} — treat boolean true as no useful error string
+        $errorValue = $object->error ?? null;
+        $hasUsefulError = !empty($errorValue) && !is_bool($errorValue);
+
+        if ($hasUsefulError && !empty($object->field)) {
             $field = $object->field;
-            $error = $object->error;
+            $error = is_string($errorValue) ? $errorValue : json_encode($errorValue);
             $message = "Error executing API call ({$field}: {$error})";
-        } elseif (!empty($object->error)) {
+        } elseif ($hasUsefulError) {
             // API returned just an error field (no field name)
-            $error = is_string($object->error) ? $object->error : json_encode($object->error);
+            $error = is_string($errorValue) ? $errorValue : json_encode($errorValue);
             $message = "Error executing API call: {$error}";
         } elseif (!empty($object->message)) {
             // Some APIs use 'message' instead of 'error'

@@ -17,12 +17,12 @@ class CodebrainPycApiClient
     /**
      * Version of the API.
      */
-    public const API_VERSION = 'v1';
+    public const API_VERSION = 'v2';
 
     /**
      * Poduction endpoint of the remote API.
      */
-    public const API_ENDPOINT = 'https://payocityhub.com/api';
+    public const API_ENDPOINT = 'https://api.payocityhub.com';
 
     /*
     * HTTP Methods
@@ -38,11 +38,11 @@ class CodebrainPycApiClient
     protected $apiKey;
 
     /**
-     * Accesstoken for the API.
+     * Secret key for the API.
      *
      * @var string
      */
-    protected $accessToken;
+    protected $secretKey;
 
     /**
      * @var string
@@ -53,13 +53,6 @@ class CodebrainPycApiClient
      * @var \CodebrainPyc\Hub\Http\CodebrainHttpInterface
      */
     protected $httpClient;
-
-    /**
-     * RESTful Auth resource.
-     *
-     * @var AuthenticationEndpoint
-     */
-    public $auth;
 
     /**
      * RESTful Payments resource.
@@ -78,7 +71,6 @@ class CodebrainPycApiClient
 
     public function initializeEndpoints()
     {
-        $this->auth = new AuthenticationEndpoint($this);
         $this->payment = new PaymentjobEndpoint($this);
     }
 
@@ -104,22 +96,22 @@ class CodebrainPycApiClient
     }
 
     /**
-     * @param string $accessToken the shop's API key
+     * @param string $secretKey the shop's API key
      *
      * @return CodebrainPycApiClient
      *
      * @throws \InvalidArgumentException
      */
-    public function setAccessToken($accessToken)
+    public function setSecretKey($secretKey)
     {
-        $accessToken = trim($accessToken);
+        $secretKey = trim($secretKey);
 
         // Check Accesstoken
-        if (empty($accessToken)) {
-            throw new \InvalidArgumentException('Accesstoken cannot be empty, please use stored accesstoken or create a new one. (See guardian API example on the docs page))');
+        if (empty($secretKey)) {
+            throw new \InvalidArgumentException('Secret Key cannot be empty, please use the secret key displayed in the Codebrain HUB for this Point of Sale.');
         }
 
-        $this->accessToken = $accessToken;
+        $this->secretKey = $secretKey;
 
         return $this;
     }
@@ -140,24 +132,6 @@ class CodebrainPycApiClient
         $url = $this->apiEndpoint.'/'.self::API_VERSION.'/'.$apiPath;
 
         return $this->performHttpCall($httpMethod, $url, $httpBody);
-    }
-
-    /**
-     * Perform the auth http call. This method is used by the authentication resource class.
-     *
-     * @param string      $httpMethod
-     * @param string      $apiPath
-     * @param string|null $httpBody
-     *
-     * @return \stdClass
-     *
-     * @throws ApiException
-     */
-    public function doAuthHttpCall($httpMethod, $apiPath, $httpBody = null)
-    {
-        $url = $this->apiEndpoint.'/'.self::API_VERSION.'/'.$apiPath;
-
-        return $this->performAuthHttpCall($httpMethod, $url, $httpBody);
     }
 
     /**
@@ -187,9 +161,6 @@ class CodebrainPycApiClient
 
         if ($httpBody !== null) {
             $headers['Content-Type'] = 'application/json';
-
-            // Create hash of the body here, so we can sign it.
-            $headers['X-Signature'] = hash_hmac('sha512', $httpBody, $this->accessToken);
         }
 
         if (function_exists('php_uname')) {
@@ -198,60 +169,28 @@ class CodebrainPycApiClient
 
         $response = $this->httpClient->send($httpMethod, $url, $headers, $httpBody);
 
-        // Check if x-signature headers exists and the hash is correct
-        if (!isset($response->headers['x-signature'])) {
+        // Check if x-signature header exists and the hash is correct
+        if (!$response->hasHeader('x-signature')) {
             throw new ApiException('Missing signature header.');
-        } else {
-            // Get the signature from the response, with correction for Guzzle 6
-            if (is_array($response->headers['x-signature'])) {
-                $signatureHeader = $response->headers['x-signature'][0];
-            } else {
-                $signatureHeader = $response->headers['x-signature'];
-            }
-
-            $signature = hash_hmac('sha512', json_encode($response->body), $this->accessToken);
-
-            if (!hash_equals($signature, $signatureHeader)) {
-                throw new ApiException('Invalid signature.');
-            }
         }
 
-        return $response->body;
+        $body = (string) $response->getBody();
+        $signature = hash_hmac('sha512', $body, $this->secretKey);
+        $signatureHeader = $response->getHeaderLine('x-signature');
+
+        if (!hash_equals($signature, $signatureHeader)) {
+            throw new ApiException('Invalid signature.');
+        }
+
+        $decoded = @json_decode($body);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new ApiException("Unable to decode Codebrain HUB response: '{$body}'.");
+        }
+
+        return $decoded;
     }
 
-    /**
-     * Perform a http call to the authentication url. This method is used by the resource specific classes.
-     *
-     * @see $payments
-     * @see $isuers
-     *
-     * @param string      $httpMethod
-     * @param string      $url
-     * @param string|null $httpBody
-     *
-     * @return \stdClass|null
-     *
-     * @throws ApiException
-     */
-    public function performAuthHttpCall($httpMethod, $url, $httpBody = null)
-    {
-        if (empty($this->apiKey)) {
-            throw new ApiException('You have not set an API key. Please use setApiKey() to set the API key in the client.');
-        }
-
-        $headers = [
-            'Accept' => 'application/json',
-            'Authorization' => "Bearer {$this->apiKey}",
-        ];
-
-        if (function_exists('php_uname')) {
-            $headers['X-Codebrain-Client'] = php_uname();
-        }
-
-        $response = $this->httpClient->send($httpMethod, $url, $headers, $httpBody);
-
-        return $response->body;
-    }
 
     /**
      * Checks if the return is valid from the Codebrain HUB.
@@ -280,7 +219,7 @@ class CodebrainPycApiClient
 
         $hashString = $data['order_number'].','.$data['order_code'].','.$data['payment_job'];
 
-        $signature = hash_hmac('sha512', $hashString, $this->accessToken);
+        $signature = hash_hmac('sha512', $hashString, $this->secretKey);
 
         if (!hash_equals($signature, $data['signature'])) {
             throw new ApiException('Invalid signature.');
@@ -311,8 +250,8 @@ class CodebrainPycApiClient
             throw new ApiException('Missing signature header.');
         }
 
-        // Controleer de signature met de data die is verstuurd
-        $hash = hash_hmac('sha512', $jsonData, $this->accessToken);
+        // Check signature
+        $hash = hash_hmac('sha512', $jsonData, $this->secretKey);
 
         $signature = $headers['x-signature'];
 

@@ -6,6 +6,8 @@ use CodebrainPyc\Hub\CodebrainPycApiClient;
 use CodebrainPyc\Hub\Exceptions\ApiException;
 use CodebrainPyc\Hub\Exceptions\CurlException;
 use Composer\CaBundle\CaBundle;
+use GuzzleHttp\Psr7\Response;
+use Psr\Http\Message\ResponseInterface;
 
 final class CurlCodebrainHttp implements CodebrainHttpInterface
 {
@@ -40,12 +42,12 @@ final class CurlCodebrainHttp implements CodebrainHttpInterface
      * @param array  $headers
      * @param string $httpBody
      *
-     * @return \stdClass|void|null
+     * @return \Psr\Http\Message\ResponseInterface|null
      *
      * @throws \CodebrainPyc\Hub\Exceptions\ApiException
      * @throws \CodebrainPyc\Hub\Exceptions\CurlException
      */
-    public function send($httpMethod, $url, $headers, $httpBody)
+    public function send($httpMethod, $url, $headers, $httpBody): ?ResponseInterface
     {
         for ($i = 0; $i <= self::MAX_RETRIES; ++$i) {
             usleep($i * self::DELAY_INCREASE_MS);
@@ -209,53 +211,39 @@ final class CurlCodebrainHttp implements CodebrainHttpInterface
      * @param int    $statusCode
      * @param string $httpBody
      *
-     * @return \stdClass|null
+     * @return \Psr\Http\Message\ResponseInterface|null
      *
      * @throws \CodebrainPyc\Hub\Exceptions\ApiException
      */
-    private function parseResponseBody($response, $headers, $statusCode, $httpBody)
+    private function parseResponseBody($response, $headers, $statusCode, $httpBody): ?ResponseInterface
     {
         if (empty($response)) {
             if ($statusCode === self::HTTP_NO_CONTENT) {
                 return null;
             }
-            
+
             throw new ApiException(
                 sprintf('No response body found. HTTP Status: %d', $statusCode),
                 $statusCode
             );
         }
 
-        $object = new \stdClass();
-        $object->body = @json_decode($httpBody);
-        $object->headers = $headers;
-
-        // Checks if the response is valid JSON
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            $jsonError = json_last_error_msg();
+        if ($statusCode >= 400) {
             throw new ApiException(
-                sprintf(
-                    "Unable to decode PayoCity Payment HUB response: (JSON Error: %s). Status: %d. Response: '%s'",
-                    $jsonError,
-                    $statusCode,
-                    mb_substr($httpBody, 0, 200)
-                ),
+                sprintf('HTTP %d: %s', $statusCode, mb_substr($httpBody, 0, 200)),
                 $statusCode
             );
         }
 
-        // Checks if the response has an error
-        if (isset($object->body->error)) {
-            $errorDetails = is_string($object->body->error) 
-                ? $object->body->error 
-                : json_encode($object->body->error);
-            throw new ApiException(
-                sprintf("PayoCity Payment HUB error: (Status %d): %s", $statusCode, $errorDetails),
-                $statusCode
-            );
+        // Convert flat header array to PSR-7 format (each value wrapped in an array)
+        $psr7Headers = [];
+        foreach ($headers as $name => $value) {
+            if ($name !== 'http_code') {
+                $psr7Headers[$name] = [$value];
+            }
         }
 
-        return $object;
+        return new Response($statusCode, $psr7Headers, $httpBody);
     }
 
     private function parseHeaders($headers)

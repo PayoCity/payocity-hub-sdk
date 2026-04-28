@@ -91,21 +91,6 @@ abstract class EndpointAbstract
     }
 
     /**
-     * Retrieves a single object from the REST API using the GET method, for instance the status pull.
-     *
-     * @throws ApiException
-     */
-    protected function rest_get(array $filters)
-    {
-        $result = $this->client->doAuthHttpCall(
-            self::REST_READ,
-            "{$this->getResourcePath()}".$this->buildQueryString($filters)
-        );
-
-        return ResourceFactory::createFromApiResult($result, $this->getResourceObject());
-    }
-
-    /**
      * @return string
      *
      * @throws ApiException

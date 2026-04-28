@@ -29,16 +29,6 @@ By far the easiest way to install the HUB API client is to require it with [Comp
     }
 
 
-
-## Accesstoken ##
-
-There are several functions and examples available for the accesstoken creation.
-Also additional notes for storage.
-
-This can be found on: [Guardian](https://docs.payocity.nl/guardian)
-
-
-
 ## PaymentJob ##
 
 

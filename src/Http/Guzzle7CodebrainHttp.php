@@ -70,11 +70,11 @@ final class Guzzle7CodebrainHttp implements CodebrainHttpInterface
      * @param array  $headers
      * @param string $httpBody
      *
-     * @return \stdClass|null
+     * @return \Psr\Http\Message\ResponseInterface|null
      *
      * @throws \CodebrainPyc\Hub\Exceptions\ApiException
      */
-    public function send($httpMethod, $url, $headers, $httpBody)
+    public function send($httpMethod, $url, $headers, $httpBody): ?ResponseInterface
     {
         $request = new Request($httpMethod, $url, $headers, $httpBody);
 
@@ -89,7 +89,15 @@ final class Guzzle7CodebrainHttp implements CodebrainHttpInterface
             throw new ApiException($e->getMessage(), $e->getCode(), null, $request, null);
         }
 
-        return $this->parseResponseBody($response);
+        if ($response->getStatusCode() === self::HTTP_NO_CONTENT) {
+            return null;
+        }
+
+        if ($response->getStatusCode() >= 400) {
+            throw ApiException::createFromResponse($response, null);
+        }
+
+        return $response;
     }
 
     /**
@@ -129,42 +137,6 @@ final class Guzzle7CodebrainHttp implements CodebrainHttpInterface
     public function disableDebugging()
     {
         $this->debugging = false;
-    }
-
-    /**
-     * Parse the PSR-7 Response body.
-     *
-     * @return \stdClass|null
-     *
-     * @throws ApiException
-     */
-    private function parseResponseBody(ResponseInterface $response)
-    {
-        $body = (string) $response->getBody();
-        if (empty($body)) {
-            if ($response->getStatusCode() === self::HTTP_NO_CONTENT) {
-                return null;
-            }
-
-            throw new ApiException('No response body found.');
-        }
-
-        $object = new \stdClass();
-
-        // Add headers to body object
-        $object->headers = $response->getHeaders();
-
-        $object->body = @json_decode($body);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new ApiException("Unable to decode PayoCity Payment HUB response: '{$body}'.");
-        }
-
-        if ($response->getStatusCode() >= 400) {
-            throw ApiException::createFromResponse($response, null);
-        }
-
-        return $object;
     }
 
     /**

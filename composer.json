@@ -1,7 +1,7 @@
 {
     "name": "codebrain-pyc/hub",
     "type": "project",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "The PayoCity Payment HUB SDK example code.",
     "keywords": ["payment", "payocity", "sdk", "ideal"],
     "license": "MIT",
