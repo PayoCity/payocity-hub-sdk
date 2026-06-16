@@ -42,7 +42,7 @@ class CodebrainPycApiClient
      *
      * @var string
      */
-    protected $secretKey;
+    protected $apiSecret;
 
     /**
      * @var string
@@ -96,22 +96,22 @@ class CodebrainPycApiClient
     }
 
     /**
-     * @param string $secretKey the shop's API key
+     * @param string $apiSecret the shop's API key
      *
      * @return CodebrainPycApiClient
      *
      * @throws \InvalidArgumentException
      */
-    public function setSecretKey($secretKey)
+    public function setApiSecret($apiSecret)
     {
-        $secretKey = trim($secretKey);
+        $apiSecret = trim($apiSecret);
 
         // Check Accesstoken
-        if (empty($secretKey)) {
+        if (empty($apiSecret)) {
             throw new \InvalidArgumentException('Secret Key cannot be empty, please use the secret key displayed in the Codebrain HUB for this Point of Sale.');
         }
 
-        $this->secretKey = $secretKey;
+        $this->apiSecret = $apiSecret;
 
         return $this;
     }
@@ -175,7 +175,7 @@ class CodebrainPycApiClient
         }
 
         $body = (string) $response->getBody();
-        $signature = hash_hmac('sha512', $body, $this->secretKey);
+        $signature = hash_hmac('sha512', $body, $this->apiSecret);
         $signatureHeader = $response->getHeaderLine('x-signature');
 
         if (!hash_equals($signature, $signatureHeader)) {
@@ -219,7 +219,7 @@ class CodebrainPycApiClient
 
         $hashString = $data['order_number'].','.$data['order_code'].','.$data['payment_job'];
 
-        $signature = hash_hmac('sha512', $hashString, $this->secretKey);
+        $signature = hash_hmac('sha512', $hashString, $this->apiSecret);
 
         if (!hash_equals($signature, $data['signature'])) {
             throw new ApiException('Invalid signature.');
@@ -251,7 +251,7 @@ class CodebrainPycApiClient
         }
 
         // Check signature
-        $hash = hash_hmac('sha512', $jsonData, $this->secretKey);
+        $hash = hash_hmac('sha512', $jsonData, $this->apiSecret);
 
         $signature = $headers['x-signature'];
 
